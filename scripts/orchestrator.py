@@ -3,13 +3,14 @@
 Cloud Orchestrator: launches, monitors, and coordinates cloud researchers on PrimeIntellect.
 
 Responsibilities:
-1. Launch H100 pods via prime CLI
+1. Launch L40 pods via prime CLI (free tier)
 2. Assign experiments to nodes via embed-jobs channel
 3. Monitor results via embed-results channel + wandb
 4. Aggregate leaderboard from all nodes
 5. Terminate idle pods
 
 Configuration: orchestrator_config.yaml (in agenthub root)
+Free tier: 4 parallel L40 pods, 8 total experiments, ~60-90 min per experiment
 """
 
 import os
@@ -32,11 +33,11 @@ class PodConfig:
     """Cloud pod configuration."""
     name: str
     image: str = "pytorch:2.5-cuda12.1-runtime-ubuntu22.04"
-    gpu_type: str = "H100_80GB"
-    cpu_count: int = 16
+    gpu_type: str = "L40"  # Free tier: L40 (48GB VRAM)
+    cpu_count: int = 14    # Free tier defaults
     memory_gb: int = 128
-    disk_gb: int = 500
-    timeout_minutes: int = 120
+    disk_gb: int = 625     # Free tier disk size
+    timeout_minutes: int = 90  # Shorter for free tier
 
 
 class PrimeIntellectAPI:

@@ -1,92 +1,129 @@
 # Cloud Orchestrator Configuration
+# Free tier: L40 GPUs (48GB VRAM each)
 # Launched via: python scripts/orchestrator.py
 
-max_pods: 3  # Parallel researchers
-gpu_type: "H100_80GB"
-timeout_minutes: 120
+max_pods: 4  # Max out free tier — run 4 L40 pods in parallel
+gpu_type: "L40"
+timeout_minutes: 90
+cpu_count: 14
+memory_gb: 128
+disk_gb: 625
 
 # Experiment queue (will be assigned to nodes in order)
+# Maxed out: 8 experiments (2x per pod, back-to-back)
 experiment_queue:
-  # Priority 1: Baseline BRIGHT/FollowIR
-  - name: "baseline-bright-h100"
+  # Priority 1: Baseline BRIGHT
+  - name: "baseline-bright-l40"
     config:
-      name: "baseline-bright-h100"
+      name: "baseline-bright-l40"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/bright_train.jsonl"
       eval_data: "data/bright_eval.jsonl"
-      batch_size: 1024
+      batch_size: 512  # Reduced for L40 (48GB vs H100 80GB)
       epochs_warmup: 1
       epochs_contrastive: 2
       epochs_finetune: 1
       use_elo: false
       eval_dataset: "BRIGHT"
 
-  - name: "baseline-followir-h100"
+  # Priority 2: Baseline FollowIR
+  - name: "baseline-followir-l40"
     config:
-      name: "baseline-followir-h100"
+      name: "baseline-followir-l40"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/followir_train.jsonl"
       eval_data: "data/followir_eval.jsonl"
-      batch_size: 1024
+      batch_size: 512
       epochs_warmup: 1
       epochs_contrastive: 2
       epochs_finetune: 1
       use_elo: false
       eval_dataset: "FollowIR"
 
-  # Priority 2: zELO experiments (instruction oracle)
+  # Priority 3: zELO BRIGHT (instruction oracle)
   - name: "zelo-bright-instruction-oracle"
     config:
       name: "zelo-bright-instruction-oracle"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/bright_train_oracle.jsonl"
       eval_data: "data/bright_eval.jsonl"
-      batch_size: 1024
+      batch_size: 512
       epochs_warmup: 1
-      epochs_contrastive: 3
-      epochs_finetune: 2
+      epochs_contrastive: 2
+      epochs_finetune: 1
       use_elo: true
       elo_weight: 0.5
       eval_dataset: "BRIGHT"
 
+  # Priority 4: zELO FollowIR (instruction oracle)
   - name: "zelo-followir-instruction-oracle"
     config:
       name: "zelo-followir-instruction-oracle"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/followir_train_oracle.jsonl"
       eval_data: "data/followir_eval.jsonl"
-      batch_size: 1024
+      batch_size: 512
       epochs_warmup: 1
-      epochs_contrastive: 3
-      epochs_finetune: 2
+      epochs_contrastive: 2
+      epochs_finetune: 1
       use_elo: true
       elo_weight: 0.5
       eval_dataset: "FollowIR"
 
-  # Priority 3: Code search
+  # Priority 5: Code search (smaller batch for code context)
   - name: "zelo-code-execution-oracle"
     config:
       name: "zelo-code-execution-oracle"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/code_search_train_oracle.jsonl"
       eval_data: "data/code_search_eval.jsonl"
-      batch_size: 512
+      batch_size: 256  # Smaller for code
       epochs_warmup: 1
       epochs_contrastive: 2
-      epochs_finetune: 2
+      epochs_finetune: 1
       use_elo: true
       eval_dataset: "MTEB-Code"
 
-  # Priority 4: Cross-lingual MIRACL
+  # Priority 6: MIRACL cross-lingual
   - name: "zelo-miracl-cross-lingual"
     config:
       name: "zelo-miracl-cross-lingual"
       model_name: "answerdotai/ModernBERT-base"
       train_data: "data/miracl_train.jsonl"
       eval_data: "data/miracl_eval.jsonl"
-      batch_size: 768
+      batch_size: 512
       epochs_warmup: 1
-      epochs_contrastive: 3
+      epochs_contrastive: 2
       epochs_finetune: 1
       use_elo: false
       eval_dataset: "MIRACL"
+
+  # Priority 7: Extended zELO BRIGHT (more epochs)
+  - name: "zelo-bright-extended"
+    config:
+      name: "zelo-bright-extended"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/bright_train_oracle.jsonl"
+      eval_data: "data/bright_eval.jsonl"
+      batch_size: 512
+      epochs_warmup: 2
+      epochs_contrastive: 3
+      epochs_finetune: 2
+      use_elo: true
+      elo_weight: 0.5
+      eval_dataset: "BRIGHT"
+
+  # Priority 8: Extended zELO FollowIR (more epochs)
+  - name: "zelo-followir-extended"
+    config:
+      name: "zelo-followir-extended"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/followir_train_oracle.jsonl"
+      eval_data: "data/followir_eval.jsonl"
+      batch_size: 512
+      epochs_warmup: 2
+      epochs_contrastive: 3
+      epochs_finetune: 2
+      use_elo: true
+      elo_weight: 0.5
+      eval_dataset: "FollowIR"
