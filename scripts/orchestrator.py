@@ -86,7 +86,7 @@ class PrimeIntellectAPI:
             "--name", pod_config.name,
             "--image", pod_config.image,
             "--gpu-type", pod_config.gpu_type,
-            "--cpu", str(pod_config.cpu_count),
+            "--vcpus", str(pod_config.cpu_count),
             "--memory", f"{pod_config.memory_gb}Gi",
             "--disk", f"{pod_config.disk_gb}Gi",
             "--timeout", f"{pod_config.timeout_minutes}m",
