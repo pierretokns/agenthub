@@ -1,0 +1,92 @@
+# Cloud Orchestrator Configuration
+# Launched via: python scripts/orchestrator.py
+
+max_pods: 3  # Parallel researchers
+gpu_type: "H100_80GB"
+timeout_minutes: 120
+
+# Experiment queue (will be assigned to nodes in order)
+experiment_queue:
+  # Priority 1: Baseline BRIGHT/FollowIR
+  - name: "baseline-bright-h100"
+    config:
+      name: "baseline-bright-h100"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/bright_train.jsonl"
+      eval_data: "data/bright_eval.jsonl"
+      batch_size: 1024
+      epochs_warmup: 1
+      epochs_contrastive: 2
+      epochs_finetune: 1
+      use_elo: false
+      eval_dataset: "BRIGHT"
+
+  - name: "baseline-followir-h100"
+    config:
+      name: "baseline-followir-h100"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/followir_train.jsonl"
+      eval_data: "data/followir_eval.jsonl"
+      batch_size: 1024
+      epochs_warmup: 1
+      epochs_contrastive: 2
+      epochs_finetune: 1
+      use_elo: false
+      eval_dataset: "FollowIR"
+
+  # Priority 2: zELO experiments (instruction oracle)
+  - name: "zelo-bright-instruction-oracle"
+    config:
+      name: "zelo-bright-instruction-oracle"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/bright_train_oracle.jsonl"
+      eval_data: "data/bright_eval.jsonl"
+      batch_size: 1024
+      epochs_warmup: 1
+      epochs_contrastive: 3
+      epochs_finetune: 2
+      use_elo: true
+      elo_weight: 0.5
+      eval_dataset: "BRIGHT"
+
+  - name: "zelo-followir-instruction-oracle"
+    config:
+      name: "zelo-followir-instruction-oracle"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/followir_train_oracle.jsonl"
+      eval_data: "data/followir_eval.jsonl"
+      batch_size: 1024
+      epochs_warmup: 1
+      epochs_contrastive: 3
+      epochs_finetune: 2
+      use_elo: true
+      elo_weight: 0.5
+      eval_dataset: "FollowIR"
+
+  # Priority 3: Code search
+  - name: "zelo-code-execution-oracle"
+    config:
+      name: "zelo-code-execution-oracle"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/code_search_train_oracle.jsonl"
+      eval_data: "data/code_search_eval.jsonl"
+      batch_size: 512
+      epochs_warmup: 1
+      epochs_contrastive: 2
+      epochs_finetune: 2
+      use_elo: true
+      eval_dataset: "MTEB-Code"
+
+  # Priority 4: Cross-lingual MIRACL
+  - name: "zelo-miracl-cross-lingual"
+    config:
+      name: "zelo-miracl-cross-lingual"
+      model_name: "answerdotai/ModernBERT-base"
+      train_data: "data/miracl_train.jsonl"
+      eval_data: "data/miracl_eval.jsonl"
+      batch_size: 768
+      epochs_warmup: 1
+      epochs_contrastive: 3
+      epochs_finetune: 1
+      use_elo: false
+      eval_dataset: "MIRACL"
