@@ -79,7 +79,7 @@ class PrimeIntellectAPI:
 
         env_args = []
         for key, val in env_vars.items():
-            env_args.extend(["-e", f"{key}={val}"])
+            env_args.extend(["--env", f"{key}={val}"])
 
         cmd = [
             "pods", "create",
@@ -87,11 +87,10 @@ class PrimeIntellectAPI:
             "--image", pod_config.image,
             "--gpu-type", pod_config.gpu_type,
             "--vcpus", str(pod_config.cpu_count),
-            "--memory", f"{pod_config.memory_gb}Gi",
-            "--disk", f"{pod_config.disk_gb}Gi",
-            "--timeout", f"{pod_config.timeout_minutes}m",
-            "--command", "bash scripts/supervisor.sh",
+            "--memory", str(pod_config.memory_gb),
+            "--disk-size", str(pod_config.disk_gb),
             *env_args,
+            "--yes",
         ]
 
         result = self.run_prime_command(cmd)
@@ -188,6 +187,7 @@ class Orchestrator:
         # Environment variables to inject
         env_vars = {
             "NODE_ID": node_id,
+            "PRIME_INTELLECT_API_KEY": os.getenv("PRIME_INTELLECT_API_KEY", ""),
             "AGENTHUB_API_KEY": os.getenv("AGENTHUB_API_KEY", ""),
             "AGENTHUB_ADDR": os.getenv("AGENTHUB_ADDR", "http://localhost:8000"),
             "WANDB_API_KEY": os.getenv("WANDB_API_KEY", ""),
