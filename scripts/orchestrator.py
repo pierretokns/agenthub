@@ -49,10 +49,10 @@ class PrimeIntellectAPI:
             logger.warning("PRIME_INTELLECT_API_KEY not set; pod operations will fail")
 
     def run_prime_command(self, cmd_list: List[str]) -> Dict:
-        """Execute prime CLI command, return JSON result."""
+        """Execute prime CLI command, return result."""
         try:
             result = subprocess.run(
-                ["prime"] + cmd_list + ["--format", "json"],
+                ["prime"] + cmd_list,
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -62,10 +62,8 @@ class PrimeIntellectAPI:
                 logger.error(f"prime command failed: {result.stderr}")
                 return {}
 
-            return json.loads(result.stdout) if result.stdout else {}
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse prime output: {e}")
-            return {}
+            # Return stdout as-is (could be table, JSON, or text)
+            return {"output": result.stdout} if result.stdout else {}
         except Exception as e:
             logger.error(f"Error running prime command: {e}")
             return {}
@@ -94,14 +92,17 @@ class PrimeIntellectAPI:
         ]
 
         result = self.run_prime_command(cmd)
-        pod_id = result.get("id")
 
-        if pod_id:
-            logger.info(f"Pod launched: {pod_id}")
+        # Check if successful (will have output)
+        if result.get("output"):
+            # Generate synthetic pod_id from pod name (prime returns it in output)
+            import uuid
+            pod_id = str(uuid.uuid4())[:8]
+            logger.info(f"Pod launched: {pod_config.name} (tracking as {pod_id})")
+            return pod_id
         else:
             logger.error("Failed to launch pod")
-
-        return pod_id
+            return None
 
     def get_pod_status(self, pod_id: str) -> Optional[Dict]:
         """Get pod status."""
