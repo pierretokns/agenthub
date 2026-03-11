@@ -234,9 +234,13 @@ class Orchestrator:
             )
 
             if result.returncode == 0:
-                logger.info(f"Posted job for {job['node']}")
+                logger.info(f"Posted job for {job['node']}: {job['experiment']}")
             else:
-                logger.warning(f"Failed to post job: {result.stderr}")
+                # Fall back to local file if agenthub not available
+                logger.warning(f"Failed to post to agenthub, storing locally: {result.stderr}")
+                with open("jobs_pending.jsonl", "a") as f:
+                    f.write(json.dumps(job) + "\n")
+                logger.info(f"Stored job locally for {job['node']}: {job['experiment']}")
         except Exception as e:
             logger.error(f"Error posting job: {e}")
 
