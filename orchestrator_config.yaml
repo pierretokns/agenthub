@@ -1,13 +1,17 @@
 # Cloud Orchestrator Configuration
-# Free tier: L40 GPUs (48GB VRAM each)
+# PrimeIntellect L40/L40S GPUs (48GB VRAM each)
 # Launched via: python scripts/orchestrator.py
 
-max_pods: 4  # Max out free tier — run 4 L40 pods in parallel
+# Persistent disk configuration
+disk_id: "FILL_IN_AFTER_DISK_CREATE"  # Run: prime disks create --name embed-data --size 500
+
+# Pod configuration
+max_pods: 4  # Max concurrent pods
 gpu_type: "L40"
 timeout_minutes: 90
 cpu_count: 14
 memory_gb: 128
-disk_gb: 625
+disk_gb: 200  # Ephemeral OS disk (data on persistent disk)
 
 # Experiment queue (will be assigned to nodes in order)
 # Maxed out: 8 experiments (2x per pod, back-to-back)
@@ -17,8 +21,8 @@ experiment_queue:
     config:
       name: "baseline-bright-l40"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/bright_train.jsonl"
-      eval_data: "data/bright_eval.jsonl"
+      train_data: "bright_train.jsonl"
+      eval_data: "bright_eval.jsonl"
       batch_size: 512  # Reduced for L40 (48GB vs H100 80GB)
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -31,8 +35,8 @@ experiment_queue:
     config:
       name: "baseline-followir-l40"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/followir_train.jsonl"
-      eval_data: "data/followir_eval.jsonl"
+      train_data: "followir_train.jsonl"
+      eval_data: "followir_eval.jsonl"
       batch_size: 512
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -45,8 +49,8 @@ experiment_queue:
     config:
       name: "zelo-bright-instruction-oracle"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/bright_train_oracle.jsonl"
-      eval_data: "data/bright_eval.jsonl"
+      train_data: "bright_train_oracle.jsonl"
+      eval_data: "bright_eval.jsonl"
       batch_size: 512
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -60,8 +64,8 @@ experiment_queue:
     config:
       name: "zelo-followir-instruction-oracle"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/followir_train_oracle.jsonl"
-      eval_data: "data/followir_eval.jsonl"
+      train_data: "followir_train_oracle.jsonl"
+      eval_data: "followir_eval.jsonl"
       batch_size: 512
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -75,8 +79,8 @@ experiment_queue:
     config:
       name: "zelo-code-execution-oracle"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/code_search_train_oracle.jsonl"
-      eval_data: "data/code_search_eval.jsonl"
+      train_data: "code_search_train_oracle.jsonl"
+      eval_data: "code_search_eval.jsonl"
       batch_size: 256  # Smaller for code
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -89,8 +93,8 @@ experiment_queue:
     config:
       name: "zelo-miracl-cross-lingual"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/miracl_train.jsonl"
-      eval_data: "data/miracl_eval.jsonl"
+      train_data: "miracl_train.jsonl"
+      eval_data: "miracl_eval.jsonl"
       batch_size: 512
       epochs_warmup: 1
       epochs_contrastive: 2
@@ -103,8 +107,8 @@ experiment_queue:
     config:
       name: "zelo-bright-extended"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/bright_train_oracle.jsonl"
-      eval_data: "data/bright_eval.jsonl"
+      train_data: "bright_train_oracle.jsonl"
+      eval_data: "bright_eval.jsonl"
       batch_size: 512
       epochs_warmup: 2
       epochs_contrastive: 3
@@ -118,8 +122,8 @@ experiment_queue:
     config:
       name: "zelo-followir-extended"
       model_name: "answerdotai/ModernBERT-base"
-      train_data: "data/followir_train_oracle.jsonl"
-      eval_data: "data/followir_eval.jsonl"
+      train_data: "followir_train_oracle.jsonl"
+      eval_data: "followir_eval.jsonl"
       batch_size: 512
       epochs_warmup: 2
       epochs_contrastive: 3
