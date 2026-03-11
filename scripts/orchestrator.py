@@ -223,11 +223,9 @@ class Orchestrator:
     def _post_job(self, job: Dict):
         """Post job assignment to embed-jobs channel."""
         try:
-            # Use local agenthub server on port 9000
             result = subprocess.run(
                 [
-                    "ah", "--addr", "http://localhost:9000",
-                    "post", "embed-jobs",
+                    "ah", "post", "embed-jobs",
                     json.dumps(job)
                 ],
                 capture_output=True,
