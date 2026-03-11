@@ -1,0 +1,6 @@
+[submodule "autoresearch-embed"]
+	path = autoresearch-embed
+	url = https://github.com/pierretokns/autoresearch-embed.git
+[submodule "autoresearch-mlx"]
+	path = autoresearch-mlx
+	url = https://github.com/pierretokns/autoresearch-mlx.git
