@@ -1,0 +1,64 @@
+Monitoring training runs...
+BRIGHT: wg6mko1s5l1fok3ij57l3h96
+FollowIR: b1k2g2sxenp3jyrxsbylj06b
+
+Waiting for a run to complete so MIRACL can launch...
+
+[2026-03-11 22:05:48] BRIGHT: RUNNING, FollowIR: RUNNING, Active runs: 2
+[2026-03-11 22:06:22] BRIGHT: RUNNING, FollowIR: RUNNING, Active runs: 2
+[2026-03-11 22:06:56] BRIGHT: RUNNING, FollowIR: FAILED, Active runs: 1
+Space available! Launching MIRACL baseline...
+Loading config from configs/miracl_baseline.toml
+
+Configuration:
+
+Model & Environment
+  Model:        PrimeIntellect/Qwen3-0.6B-Reverse-Text-SFT
+  Environments: pierretokns/miracl-retrieval
+
+Training
+  Max Steps:           10000
+  Batch Size:          512
+  Rollouts per Example: 8
+  Learning Rate:       2e-05
+  LoRA Alpha:          16
+
+Sampling
+  Max Tokens:  2048
+  Temperature: 0.7
+
+Evaluation
+  Environments: pierretokns/miracl-retrieval
+  Interval:     1000
+
+Infrastructure
+  Compute Size: M
+
+Checking Environment Actions...
+  ✓ pierretokns/miracl-retrieval (success)
+
+Creating RL training run...
+
+✓ Run created successfully!
+
+Monitor run at:
+  https://app.primeintellect.ai/dashboard/training/ve61qxdrpex7285m6y18cemm
+
+View logs with:
+  prime rl logs ve61qxdrpex7285m6y18cemm -f
+MIRACL launched successfully!
+
+All three baselines now training:
+                                RL Training Runs                                
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━┓
+┃ ID                       ┃ Status  ┃ Model    ┃ Environ… ┃ Steps ┃ Created   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━┩
+│ ve61qxdrpex7285m6y18cemm │ PENDING │ PrimeIn… │ pierret… │ 10000 │ 2026-03-… │
+│                          │         │          │          │       │ 02:06     │
+│ b1k2g2sxenp3jyrxsbylj06b │ FAILED  │ PrimeIn… │ pierret… │ 10000 │ 2026-03-… │
+│                          │         │          │          │       │ 02:04     │
+│ wg6mko1s5l1fok3ij57l3h96 │ RUNNING │ PrimeIn… │ pierret… │ 10000 │ 2026-03-… │
+│                          │         │          │          │       │ 02:04     │
+└──────────────────────────┴─────────┴──────────┴──────────┴───────┴───────────┘
+
+Total: 3 run(s)
