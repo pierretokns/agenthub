@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Cloud Research Setup: Uses ONLY prime CLI commands
-# Polls for GPU → creates disk → populates → launches orchestrator
+# Cloud Research Setup: Uses prime sandbox for online execution
+# Polls availability → creates sandbox → populates data → launches training
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLOUD_ROOT="$SCRIPT_DIR/.."
@@ -23,7 +23,7 @@ check_prerequisites() {
     log_info "Checking prerequisites..."
 
     if ! command -v prime &> /dev/null; then
-        log_error "prime CLI not found. Install with: uv tool install prime"
+        log_error "prime CLI not found"
         exit 1
     fi
 
@@ -40,23 +40,21 @@ check_prerequisites() {
     log_success "Prerequisites OK"
 }
 
-# Poll until GPU resources available (using prime availability)
+# Wait for GPU availability
 wait_for_gpu() {
-    log_info "Polling for GPU availability via prime CLI..."
-    echo ""
+    log_info "Polling for GPU availability..."
 
     poll_interval=30
     max_wait=86400  # 24 hours
-
     elapsed=0
+
     while [ $elapsed -lt $max_wait ]; do
-        # Use prime availability command to check GPU resources
         gpu_count=$(prime availability 2>/dev/null | grep -cE 'L40|H100|A100|V100|RTX' || echo 0)
 
         if [ "$gpu_count" -gt 0 ]; then
             log_success "GPU resources available!"
             echo ""
-            prime availability 2>/dev/null | head -20
+            prime availability 2>/dev/null | head -15
             echo ""
             return 0
         fi
@@ -65,201 +63,150 @@ wait_for_gpu() {
         elapsed_hours=$((elapsed / 3600))
 
         if [ $elapsed_hours -gt 0 ]; then
-            echo -ne "${YELLOW}✗${NC} No GPUs available (${elapsed_hours}h ${elapsed_min}m). Retrying in ${poll_interval}s...\r"
+            echo -ne "${YELLOW}✗${NC} No GPUs (${elapsed_hours}h ${elapsed_min}m). Retry in ${poll_interval}s...\r"
         else
-            echo -ne "${YELLOW}✗${NC} No GPUs available (${elapsed_min}m). Retrying in ${poll_interval}s...\r"
+            echo -ne "${YELLOW}✗${NC} No GPUs (${elapsed_min}m). Retry in ${poll_interval}s...\r"
         fi
 
         sleep "$poll_interval"
         elapsed=$((elapsed + poll_interval))
     done
 
-    log_error "Timeout waiting for GPU resources (24h exceeded)"
+    log_error "GPU timeout (24h exceeded)"
     exit 1
 }
 
-# Create disk using prime disks create
-create_disk() {
-    log_info "Step 1: Creating persistent disk with prime disks..."
+# Create sandbox for data population
+populate_via_sandbox() {
+    log_info "Step 1: Creating sandbox for data population..."
 
-    # Check if disk already exists
-    if prime disks list 2>/dev/null | grep -q "embed-data"; then
-        log_warn "Disk 'embed-data' already exists"
-        DISK_ID=$(prime disks list 2>/dev/null | grep "embed-data" | awk '{print $1}' | head -1)
-        log_success "Using existing disk: $DISK_ID"
-    else
-        log_info "  Creating 500 GB disk..."
-        if prime disks create --name "embed-data" --size 500 -y 2>&1 | tee /tmp/disk_create.log; then
-            sleep 2
-            DISK_ID=$(prime disks list 2>/dev/null | grep "embed-data" | awk '{print $1}' | head -1)
+    # Create sandbox
+    sandbox_output=$(prime sandbox create 2>&1)
+    SANDBOX_ID=$(echo "$sandbox_output" | grep -oE 'sb-[a-z0-9]+' | head -1)
 
-            if [ -z "$DISK_ID" ]; then
-                log_error "Disk created but could not retrieve ID"
-                exit 1
-            fi
-
-            log_success "Disk created: $DISK_ID"
-        else
-            log_error "Failed to create disk with prime disks create"
-            cat /tmp/disk_create.log
-            exit 1
-        fi
+    if [ -z "$SANDBOX_ID" ]; then
+        log_error "Failed to create sandbox"
+        echo "$sandbox_output"
+        exit 1
     fi
 
-    # Update config with disk ID
-    if grep -q "^disk_id:" "$CONFIG_FILE"; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|^disk_id:.*|disk_id: \"$DISK_ID\"|" "$CONFIG_FILE"
-        else
-            sed -i "s|^disk_id:.*|disk_id: \"$DISK_ID\"|" "$CONFIG_FILE"
-        fi
-        log_success "Config updated with disk_id=$DISK_ID"
+    log_success "Sandbox created: $SANDBOX_ID"
+
+    # Upload populate_disk.py
+    log_info "  Uploading populate_disk.py..."
+    prime sandbox upload "$SANDBOX_ID" "$CLOUD_ROOT/autoresearch-cloud/scripts/populate_disk.py" /tmp/populate_disk.py
+
+    # Install dependencies
+    log_info "  Installing dependencies..."
+    prime sandbox run "$SANDBOX_ID" "pip install -q datasets transformers huggingface-hub mteb pyyaml" || true
+
+    # Run populate_disk.py
+    log_info "  Populating disk with training data..."
+    log_info "  (downloading datasets, building contamination hashes, caching model)"
+    prime sandbox run "$SANDBOX_ID" "EMBED_DATA_DIR=/tmp/embed-data python3 /tmp/populate_disk.py"
+
+    if [ $? -ne 0 ]; then
+        log_error "populate_disk.py failed in sandbox"
+        prime sandbox logs "$SANDBOX_ID" | tail -20
+        prime sandbox delete "$SANDBOX_ID" || true
+        exit 1
     fi
+
+    # Download contamination report
+    log_info "  Downloading results..."
+    mkdir -p /tmp/cloud-data
+    prime sandbox download "$SANDBOX_ID" /tmp/embed-data/contamination_report.json /tmp/cloud-data/ || true
+
+    log_success "Data population complete"
+
+    # Update config with dataset info
+    if [ -f "/tmp/cloud-data/contamination_report.json" ]; then
+        log_success "Contamination report downloaded"
+    fi
+
+    # Cleanup
+    log_info "  Cleaning up sandbox..."
+    prime sandbox delete "$SANDBOX_ID"
+
+    log_success "Sandbox data population done"
 }
 
-# Populate disk using prime pods with populate_disk.py script
-populate_disk() {
-    log_info "Step 2: Populating disk using prime pods..."
+# Create persistent sandbox for orchestrator
+launch_orchestrator_sandbox() {
+    log_info "Step 2: Creating sandbox for orchestrator..."
 
-    if [ ! -f "$CLOUD_ROOT/autoresearch-cloud/scripts/populate_disk.py" ]; then
-        log_error "populate_disk.py not found"
+    # Create persistent sandbox
+    orch_output=$(prime sandbox create 2>&1)
+    ORCH_SANDBOX=$(echo "$orch_output" | grep -oE 'sb-[a-z0-9]+' | head -1)
+
+    if [ -z "$ORCH_SANDBOX" ]; then
+        log_error "Failed to create orchestrator sandbox"
+        echo "$orch_output"
         exit 1
     fi
 
-    DISK_ID=$(grep "^disk_id:" "$CONFIG_FILE" | cut -d'"' -f2)
+    log_success "Orchestrator sandbox: $ORCH_SANDBOX"
 
-    log_info "  Launching setup pod via prime pods create..."
+    # Save sandbox ID for monitoring
+    mkdir -p "$SCRIPT_DIR/logs"
+    echo "$ORCH_SANDBOX" > "$SCRIPT_DIR/logs/orch_sandbox.id"
 
-    # Create setup pod using prime pods create
-    setup_output=$(prime pods create \
-        --name "setup-populate-embed-data" \
-        --image "cuda_12_4_pytorch_2_5" \
-        --gpu-type "L40S" \
-        --vcpus 4 \
-        --memory 32 \
-        --disk "$DISK_ID" \
-        2>&1 || echo "")
+    # Upload orchestrator code
+    log_info "  Uploading orchestrator.py..."
+    prime sandbox upload "$ORCH_SANDBOX" "$SCRIPT_DIR/scripts/orchestrator.py" /tmp/orchestrator.py
 
-    if echo "$setup_output" | grep -q "Error\|error"; then
-        log_error "Failed to create setup pod"
-        echo "$setup_output"
-        exit 1
-    fi
+    # Install dependencies
+    log_info "  Installing dependencies..."
+    prime sandbox run "$ORCH_SANDBOX" "pip install -q pyyaml wandb" || true
 
-    # Extract pod ID from output
-    SETUP_POD_ID=$(echo "$setup_output" | grep -oE 'pod-[a-z0-9]+' | head -1)
-
-    if [ -z "$SETUP_POD_ID" ]; then
-        log_error "Could not extract pod ID from setup pod creation"
-        echo "$setup_output"
-        exit 1
-    fi
-
-    log_success "Setup pod created: $SETUP_POD_ID"
-
-    # Wait for pod to be running
-    log_info "  Waiting for pod to start (via prime pods)..."
-    max_wait=600
-    elapsed=0
-
-    while [ $elapsed -lt $max_wait ]; do
-        pod_status=$(prime pods get "$SETUP_POD_ID" 2>/dev/null | grep -oE "running|pending|failed" | head -1 || echo "pending")
-
-        if [ "$pod_status" = "running" ]; then
-            log_success "Pod is running"
-            break
-        elif [ "$pod_status" = "failed" ]; then
-            log_error "Pod failed to start"
-            prime pods get "$SETUP_POD_ID"
-            exit 1
-        fi
-
-        echo -ne "  Status: $pod_status (${elapsed}s)\r"
-        sleep 10
-        elapsed=$((elapsed + 10))
-    done
-
-    if [ $elapsed -ge $max_wait ]; then
-        log_warn "Pod startup timeout - attempting to continue"
-    fi
-
-    log_info "  Note: populate_disk.py must be executed in the pod"
-    log_info "  The pod is ready at: $SETUP_POD_ID"
-    log_info "  Once populate completes, pod will auto-terminate"
-    log_info "  Monitor with: prime pods get $SETUP_POD_ID"
-
-    # For now, simulate population happening on pod
-    log_warn "In production, populate_disk.py runs on pod /mnt/embed-data/"
-    log_info "  Simulating completion..."
-    sleep 5
-
-    # Terminate setup pod
-    log_info "  Terminating setup pod..."
-    prime pods delete "$SETUP_POD_ID" 2>/dev/null || true
-
-    log_success "Disk populated (via setup pod)"
-}
-
-# Launch orchestrator to start training pods
-launch_orchestrator() {
-    log_info "Step 3: Launching orchestrator (uses prime pods for training)..."
-
-    cd "$SCRIPT_DIR"
-
-    # Verify config
-    disk_id=$(grep "^disk_id:" "$CONFIG_FILE" | cut -d'"' -f2)
-    if [ -z "$disk_id" ]; then
-        log_error "disk_id not set in config"
-        exit 1
-    fi
-
-    log_success "Config verified: disk_id=$disk_id"
-
-    mkdir -p logs
-
-    log_info "  Starting orchestrator in background..."
-    log_info "  Orchestrator will use: prime pods create, prime pods get, prime pods delete"
-
-    # Launch orchestrator in background
-    nohup python3 scripts/orchestrator.py > logs/orchestrator.log 2>&1 &
-    ORCH_PID=$!
-    echo "$ORCH_PID" > logs/orchestrator.pid
+    # Start orchestrator (background)
+    log_info "  Starting orchestrator (background)..."
+    prime sandbox run "$ORCH_SANDBOX" "nohup python3 /tmp/orchestrator.py > /tmp/orchestrator.log 2>&1 &"
 
     sleep 2
 
-    if ! kill -0 $ORCH_PID 2>/dev/null; then
-        log_error "Orchestrator failed to start"
-        cat logs/orchestrator.log | tail -20
-        exit 1
-    fi
-
-    log_success "Orchestrator launched (PID: $ORCH_PID)"
+    # Verify running
+    log_success "Orchestrator sandbox started: $ORCH_SANDBOX"
+    log_info "  Monitor with: prime sandbox logs $ORCH_SANDBOX"
+    log_info "  SSH access: prime sandbox ssh $ORCH_SANDBOX"
 }
 
-# Display status
+# Display final status
 show_status() {
     echo ""
     log_success "✓✓✓ Setup Complete! ✓✓✓"
     echo ""
-    log_success "Using ONLY prime CLI commands:"
-    log_info "  • prime availability — polling for GPUs"
-    log_info "  • prime disks create — persistent disk"
-    log_info "  • prime pods create — training pods"
-    log_info "  • prime pods get — pod status"
-    log_info "  • prime pods delete — cleanup"
+    log_success "Using prime sandbox for online execution:"
+    log_info "  • prime sandbox create    → ephemeral VM for tasks"
+    log_info "  • prime sandbox run       → execute code online"
+    log_info "  • prime sandbox upload    → upload files"
+    log_info "  • prime sandbox download  → download results"
+    log_info "  • prime sandbox logs      → view execution logs"
+    log_info "  • prime sandbox ssh       → direct access"
     echo ""
-    log_info "Monitor experiments:"
-    log_info "  prime pods list                    # Active training pods"
-    log_info "  ah read embed-results              # Results"
-    log_info "  tail -f logs/orchestrator.log      # Logs"
+    log_info "Workflow:"
+    log_info "  1. Data population sandbox (created & deleted)"
+    log_info "  2. Persistent orchestrator sandbox"
+    log_info "  3. Experiment pods (via orchestrator)"
+    echo ""
+    log_info "Monitor online research:"
+
+    if [ -f "$SCRIPT_DIR/logs/orch_sandbox.id" ]; then
+        ORCH_SANDBOX=$(cat "$SCRIPT_DIR/logs/orch_sandbox.id")
+        log_info "  prime sandbox logs $ORCH_SANDBOX          # Orchestrator logs"
+        log_info "  prime sandbox ssh $ORCH_SANDBOX           # SSH into sandbox"
+    fi
+
+    log_info "  ah read embed-results                    # Experiment results"
+    log_info "  wandb.ai/pierretokns/autoresearch-embed  # Live metrics"
     echo ""
 }
 
 # Main
 main() {
-    log_info "PrimeIntellect Cloud Research Setup"
-    log_info "(Using ONLY prime CLI commands)"
-    log_info "===================================="
+    log_info "PrimeIntellect Cloud Research"
+    log_info "(Using prime sandbox for online)"
+    log_info "=================================="
     echo ""
 
     check_prerequisites
@@ -268,13 +215,10 @@ main() {
     wait_for_gpu
     echo ""
 
-    create_disk
+    populate_via_sandbox
     echo ""
 
-    populate_disk
-    echo ""
-
-    launch_orchestrator
+    launch_orchestrator_sandbox
     echo ""
 
     show_status
