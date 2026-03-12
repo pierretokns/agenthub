@@ -1,0 +1,40 @@
+Loading config from configs/followir_baseline.toml
+
+Configuration:
+
+Model & Environment
+  Model:        PrimeIntellect/Qwen3-1.5B-Instruct
+  Environments: primeintellect/followir-retrieval
+
+Training
+  Max Steps:           10000
+  Batch Size:          512
+  Rollouts per Example: 8
+  Learning Rate:       2e-05
+  LoRA Alpha:          16
+
+Sampling
+  Max Tokens:  2048
+  Temperature: 0.7
+
+Evaluation
+  Environments: primeintellect/followir-retrieval
+  Interval:     1000
+
+Infrastructure
+  Compute Size: M
+
+Checking Environment Actions...
+  - primeintellect/followir-retrieval (could not check)
+
+Creating RL training run...
+
+Error: Failed to create RL run: HTTP 400: Model 
+'PrimeIntellect/Qwen3-1.5B-Instruct' is not available. Available models: 
+HuggingFaceTB/SmolLM3-3B, PrimeIntellect/MiniMax-M2.5-bf16, 
+PrimeIntellect/Qwen3-0.6B-Reverse-Text-SFT, Qwen/Qwen3-30B-A3B-Instruct-2507, 
+Qwen/Qwen3-30B-A3B-Thinking-2507, Qwen/Qwen3-4B-Instruct-2507, 
+Qwen/Qwen3-4B-Thinking-2507, Qwen/Qwen3-VL-4B-Instruct, 
+Qwen/Qwen3-VL-8B-Instruct, allenai/OLMo-3-7B-Instruct, arcee-ai/Trinity-Mini, 
+arcee-ai/Trinity-Nano-Preview, meta-llama/Llama-3.2-1B-Instruct, 
+meta-llama/Llama-3.2-3B-Instruct, nvidia/OpenReasoning-Nemotron-7B

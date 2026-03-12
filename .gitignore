@@ -11,3 +11,7 @@ data/
 # OS
 .DS_Store
 .admin-key
+
+# outputs from `prime eval run`
+./outputs
+./environments/*/outputs
