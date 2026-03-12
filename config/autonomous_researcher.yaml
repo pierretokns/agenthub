@@ -1,0 +1,100 @@
+# Configuration for Autonomous Researcher Agent
+# Edit these values to customize agent behavior
+
+# Timing Configuration
+timing:
+  poll_interval: 300  # Check run status every 5 minutes
+  max_wait_hours: 24  # Max time to wait for a run to complete
+  sleep_between_iterations: 30  # Sleep 30 seconds between loops
+
+# Decision Thresholds
+thresholds:
+  score_bright: 50    # Switch from BRIGHT if score >= this
+  score_followir: 60  # Switch from FollowIR if score >= this
+  score_miracl: 70    # Switch from MIRACL if score >= this
+  plateau_gradient: 0.1  # Threshold for plateau detection
+  improvement_gradient: 0.3  # Threshold for "improving" decision
+
+# Contamination Settings
+contamination:
+  max_allowed_rate: 0.01  # 1% overlap allowed
+  enforce_gating: true    # Reject contaminated results
+  mark_risky: true        # Mark contaminated datasets as risky
+
+# Dataset Preferences
+datasets:
+  use_bright: true
+  use_followir: true
+  use_miracl: true
+  miracl_languages:
+    - en
+    - es
+    - fr
+    - de
+    - pt
+    - zh
+    - ar
+    - ja
+    - ko
+
+# Logging Configuration
+logging:
+  log_file: autonomous_researcher.log
+  log_level: INFO  # DEBUG, INFO, WARNING, ERROR
+  log_format: "[%(asctime)s] %(levelname)s: %(message)s"
+  include_timestamps: true
+  include_durations: true
+
+# Output Configuration
+output:
+  generate_leaderboard_tsv: true
+  generate_leaderboard_csv: true
+  update_git: true
+  commit_message: "result: autonomous run completed"
+  auto_push: true
+
+# Notifications (Optional)
+notifications:
+  enable_logging: true  # Log to file
+  enable_slack: false   # Slack integration (requires SLACK_WEBHOOK env var)
+  enable_email: false   # Email integration (requires EMAIL config)
+  on_completion: true
+  on_plateau: true
+  on_contamination: true
+  on_error: true
+
+# Slack Configuration (if enabled)
+slack:
+  webhook_url: "${SLACK_WEBHOOK}"  # Set via environment variable
+  channel: "#ai-research"
+  mention_on_failure: true
+
+# Advanced Configuration
+advanced:
+  retry_failed_runs: 3  # Number of retries for failed launches
+  retry_backoff_base: 2  # Exponential backoff: 2^attempt seconds
+  max_consecutive_failures: 5  # Abort if too many failures
+  estimate_run_time: true  # Log expected run time
+  parallel_analysis: false  # Analyze results while waiting (future)
+
+# Feature Flags
+features:
+  enable_gradient_analysis: true
+  enable_dataset_rotation: true
+  enable_multilingual_exploration: true
+  enable_ablation_testing: false  # Phase 4
+  enable_synthetic_data: false    # Phase 5
+  enable_ensemble: false          # Phase 6
+
+# Limits
+limits:
+  max_runs_per_day: 12  # Default is 12 (every 2h)
+  max_score_targets:
+    - score: 50
+      count: 1  # At least 1 run achieving this
+    - score: 60
+      count: 3
+    - score: 70
+      count: 5
+    - score: 75
+      count: 10  # SOTA target

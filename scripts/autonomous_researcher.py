@@ -29,12 +29,32 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List
 
-# Configuration
+# Configuration (can be overridden by config/autonomous_researcher.yaml)
 RESULTS_FILE = Path("results.jsonl")
 LEADERBOARD_FILE = Path("leaderboard.tsv")
 LOG_FILE = Path("autonomous_researcher.log")
 POLL_INTERVAL = 300  # 5 min between status checks
 MAX_WAIT_HOURS = 24  # Max wait for run to complete
+
+
+def load_config() -> Dict:
+    """Load configuration from YAML if available."""
+    config_file = Path("config/autonomous_researcher.yaml")
+    if config_file.exists():
+        try:
+            import yaml
+            with open(config_file) as f:
+                config = yaml.safe_load(f)
+            return config.get("thresholds", {}), config.get("timing", {})
+        except ImportError:
+            pass  # YAML not installed, use defaults
+    return {}, {}
+
+
+# Load config
+CONFIG_THRESHOLDS, CONFIG_TIMING = load_config()
+POLL_INTERVAL = CONFIG_TIMING.get("poll_interval", POLL_INTERVAL)
+MAX_WAIT_HOURS = CONFIG_TIMING.get("max_wait_hours", MAX_WAIT_HOURS)
 
 # Setup logging
 logging.basicConfig(
@@ -127,12 +147,19 @@ def select_next_dataset(results_history: List[Dict], iteration: int) -> Dict:
     """
     Select next dataset based on current performance.
 
-    Decision logic (from DATASET_INVENTORY.md):
+    Uses thresholds from config/autonomous_researcher.yaml if available.
+    Defaults:
     - score < 50: BRIGHT (baseline)
     - score < 60: FollowIR (instruction signal)
     - score < 70: MIRACL-en (multilingual)
-    - score >= 70: alternate languages or synthetic
+    - score >= 70: alternate languages or continue
     """
+    # Load thresholds from config
+    threshold_bright = CONFIG_THRESHOLDS.get("score_bright", 50)
+    threshold_followir = CONFIG_THRESHOLDS.get("score_followir", 60)
+    threshold_miracl = CONFIG_THRESHOLDS.get("score_miracl", 70)
+    plateau_gradient = CONFIG_THRESHOLDS.get("plateau_gradient", 0.1)
+
     if not results_history:
         logger.info("No results yet, starting with BRIGHT baseline")
         return {
@@ -150,44 +177,44 @@ def select_next_dataset(results_history: List[Dict], iteration: int) -> Dict:
     gradient = compute_gradient(results_history, window_size=5)
     logger.info(f"Current score: {score:.2f}, gradient: {gradient:.4f} points/run")
 
-    # Decision tree
-    if score < 50:
-        logger.info("Score < 50: Continue BRIGHT baseline")
+    # Decision tree (using configurable thresholds)
+    if score < threshold_bright:
+        logger.info(f"Score < {threshold_bright}: Continue BRIGHT baseline")
         return {
             "name": "BRIGHT",
             "env": "BRIGHT",
             "dataset": "google-research-datasets/BRIGHT",
             "config": "gpt4_reason",
-            "reason": "Below 50 threshold - optimize baseline",
+            "reason": f"Below {threshold_bright} threshold - optimize baseline",
         }
 
-    elif score < 60:
-        logger.info("Score < 60: Try FollowIR for instruction signal")
+    elif score < threshold_followir:
+        logger.info(f"Score < {threshold_followir}: Try FollowIR for instruction signal")
         return {
             "name": "FollowIR",
             "env": "FOLLOWIR",
             "dataset": "jhu-clsp/FollowIR-train",
             "split": "train",
-            "reason": "Below 60 threshold - add instruction signal",
+            "reason": f"Below {threshold_followir} threshold - add instruction signal",
         }
 
-    elif score < 70:
-        logger.info("Score < 70: Try MIRACL-en for multilingual signal")
+    elif score < threshold_miracl:
+        logger.info(f"Score < {threshold_miracl}: Try MIRACL-en for multilingual signal")
         return {
             "name": "MIRACL-en",
             "env": "MIRACL",
             "dataset": "miracl/miracl",
             "language": "en",
             "split": "train",
-            "reason": "Below 70 threshold - add multilingual signal",
+            "reason": f"Below {threshold_miracl} threshold - add multilingual signal",
         }
 
     else:
-        # Plateau detection: if gradient < 0.1, try new language
-        if gradient < 0.1:
+        # Plateau detection: if gradient < threshold, try new language
+        if gradient < plateau_gradient:
             languages = ["es", "fr", "de", "pt", "zh"]
             lang = languages[iteration % len(languages)]
-            logger.info(f"Plateau detected: trying MIRACL-{lang}")
+            logger.info(f"Plateau detected (gradient {gradient:.4f} < {plateau_gradient}): trying MIRACL-{lang}")
             return {
                 "name": f"MIRACL-{lang}",
                 "env": "MIRACL",
@@ -198,7 +225,7 @@ def select_next_dataset(results_history: List[Dict], iteration: int) -> Dict:
             }
 
         else:
-            logger.info("Score improving: continue current dataset")
+            logger.info(f"Score improving (gradient {gradient:.4f} >= {plateau_gradient}): continue current dataset")
             # Continue current dataset
             current = latest.get("dataset", {})
             return {
