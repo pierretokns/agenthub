@@ -236,37 +236,66 @@ def set_environment_variables(dataset_config: Dict):
                    f"MIRACL_LANGUAGE={os.environ['MIRACL_LANGUAGE']}")
 
 
-def launch_training() -> Optional[str]:
-    """Launch prime rl run and return run ID."""
+def launch_training(max_retries: int = 3) -> Optional[str]:
+    """Launch prime rl run and return run ID.
+
+    Retries up to max_retries times with exponential backoff.
+    """
     cmd = ["prime", "rl", "run", "configs/bright_baseline.toml"]
-    logger.info(f"Launching: {' '.join(cmd)}")
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    for attempt in range(1, max_retries + 1):
+        logger.info(f"Launching: {' '.join(cmd)} (attempt {attempt}/{max_retries})")
 
-        if result.returncode != 0:
-            logger.error(f"prime rl run failed: {result.stderr}")
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+            if result.returncode != 0:
+                error_msg = result.stderr[:500] if result.stderr else "Unknown error"
+                logger.error(f"prime rl run failed (attempt {attempt}): {error_msg}")
+
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt  # Exponential backoff: 2s, 4s, 8s
+                    logger.info(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                return None
+
+            # Parse run ID from output
+            for line in result.stdout.split("\n"):
+                if "run_id" in line.lower() or "id:" in line.lower():
+                    # Extract run ID (format varies)
+                    parts = line.split()
+                    for part in parts:
+                        if len(part) > 20 and part.isalnum():  # Likely a run ID
+                            logger.info(f"Successfully launched run {part}")
+                            return part
+
+            logger.warning("Could not extract run ID from output")
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                logger.info(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
             return None
 
-        # Parse run ID from output
-        for line in result.stdout.split("\n"):
-            if "run_id" in line.lower() or "id:" in line.lower():
-                # Extract run ID (format varies)
-                parts = line.split()
-                for part in parts:
-                    if len(part) > 20 and part.isalnum():  # Likely a run ID
-                        logger.info(f"Run ID: {part}")
-                        return part
+        except subprocess.TimeoutExpired:
+            logger.error(f"prime rl run timed out after 60 seconds (attempt {attempt})")
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                logger.info(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            return None
+        except Exception as e:
+            logger.error(f"Error launching training (attempt {attempt}): {e}")
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                logger.info(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            return None
 
-        logger.warning("Could not extract run ID from output, using fallback")
-        return None
-
-    except subprocess.TimeoutExpired:
-        logger.error("prime rl run timed out after 60 seconds")
-        return None
-    except Exception as e:
-        logger.error(f"Error launching training: {e}")
-        return None
+    return None
 
 
 def wait_for_completion(run_id: str, max_wait: int = MAX_WAIT_HOURS) -> bool:
@@ -336,19 +365,18 @@ def extract_metrics(run_id: str) -> Optional[Dict]:
 
 
 def update_leaderboard():
-    """Generate human-readable leaderboard from results."""
+    """Generate human-readable leaderboard from results in multiple formats."""
     results = load_results_history()
 
     if not results:
         logger.info("No valid results yet")
         return
 
+    # TSV format
     with open(LEADERBOARD_FILE, "w") as f:
-        # Header
         f.write("Iteration\tDataset\t\tPrimary Score\tSTS\tRetrieval\tStatus\n")
         f.write("=" * 80 + "\n")
 
-        # Data
         for i, result in enumerate(results, 1):
             dataset = result.get("dataset", {}).get("name", "?")
             score = result.get("evaluation", {}).get("mteb_scores", {}).get("primary_score", 0)
@@ -357,6 +385,27 @@ def update_leaderboard():
             status = "✓" if result.get("evaluation", {}).get("contamination", {}).get("passed") else "✗"
 
             f.write(f"{i}\t{dataset:16s}\t{score:6.2f}\t\t{sts:5.2f}\t{retrieval:5.2f}\t{status}\n")
+
+    # CSV format (for spreadsheets)
+    try:
+        import csv
+        csv_file = Path("leaderboard.csv")
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Iteration", "Dataset", "Primary Score", "STS", "Retrieval", "Status"])
+
+            for i, result in enumerate(results, 1):
+                dataset = result.get("dataset", {}).get("name", "?")
+                score = result.get("evaluation", {}).get("mteb_scores", {}).get("primary_score", 0)
+                sts = result.get("evaluation", {}).get("mteb_scores", {}).get("sts_mean", 0)
+                retrieval = result.get("evaluation", {}).get("mteb_scores", {}).get("retrieval_mean", 0)
+                status = "✓" if result.get("evaluation", {}).get("contamination", {}).get("passed") else "✗"
+
+                writer.writerow([i, dataset, f"{score:.2f}", f"{sts:.2f}", f"{retrieval:.2f}", status])
+
+        logger.info(f"Updated leaderboard.csv ({len(results)} runs)")
+    except Exception as e:
+        logger.warning(f"Could not write CSV: {e}")
 
     logger.info(f"Updated leaderboard.tsv ({len(results)} runs)")
 
