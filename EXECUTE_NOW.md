@@ -10,18 +10,33 @@
 ✅ All code implemented and committed
 ✅ All documentation completed
 ✅ Syntax validated
+✅ **Your machine has Podman + Colima** (better than Docker Desktop!)
 ✅ Ready for Phase 1 build & deployment
 
 ---
 
 ## What You Need to Do (In Order)
 
-### Phase 1: Build & Push (30 min - 2 hours depending on network/Docker speed)
+### Phase 1: Build & Push (30 min - 2 hours depending on network/build speed)
 
-#### Step 1: Start Docker Desktop
-- Open Docker Desktop on your Mac
-- Wait for it to start (check icon in top menu bar)
-- Verify: `docker ps` returns list of containers (should be empty or show existing)
+#### Step 1: Start Podman via Colima
+Your machine has **Podman 5.2.5 + Colima 0.8.0** pre-installed (better for M2 Ultra than Docker Desktop!)
+
+```bash
+colima start
+```
+
+Wait for output:
+```
+INFO[0020] colima is running
+```
+
+Verify it works:
+```bash
+podman ps
+```
+
+See: **DOCKER_SETUP_PODMAN.md** for detailed Podman setup & troubleshooting
 
 #### Step 2: Run Build Script
 ```bash
