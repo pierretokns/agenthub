@@ -2,6 +2,7 @@ from openenv.core.app import create_app
 from openenv.core.models import Action, Observation
 from datasets import load_dataset
 from typing import Optional
+import os
 
 
 class FollowIRAction(Action):
@@ -17,20 +18,31 @@ class FollowIRObservation(Observation):
 
 
 class FollowIREnvironment:
-    """FollowIR dataset environment for instruction-aware retrieval."""
+    """
+    FollowIR dataset environment for instruction-aware RL training only.
+
+    WARNING: This is an RL-only environment. Not suitable for deterministic
+    evaluation via prime eval run. Use with: prime rl run configs/followir_baseline.toml
+
+    Configurable via environment variables:
+    - FOLLOWIR_DATASET: HF dataset name (default: jhu-clsp/FollowIR-train)
+    - FOLLOWIR_SPLIT: data split (default: train)
+    """
 
     def __init__(self):
         self.dataset = None
         self.current_idx = 0
         self.current_example = None
+        self.dataset_name = os.getenv("FOLLOWIR_DATASET", "jhu-clsp/FollowIR-train")
+        self.dataset_split = os.getenv("FOLLOWIR_SPLIT", "train")
         self._load_data()
 
     def _load_data(self):
-        """Load FollowIR dataset."""
+        """Load FollowIR dataset from HF or environment vars."""
         try:
-            self.dataset = load_dataset("jhu-clsp/FollowIR-train", split="train")
+            self.dataset = load_dataset(self.dataset_name, split=self.dataset_split)
         except Exception as e:
-            print(f"Warning: Could not load FollowIR: {e}")
+            print(f"Warning: Could not load {self.dataset_name}: {e}")
             self.dataset = self._synthetic_dataset()
 
     def _synthetic_dataset(self):

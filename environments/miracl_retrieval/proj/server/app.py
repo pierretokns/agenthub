@@ -2,6 +2,7 @@ from openenv.core.app import create_app
 from openenv.core.models import Action, Observation
 from datasets import load_dataset
 from typing import Optional
+import os
 
 
 class MIRACLAction(Action):
@@ -17,21 +18,33 @@ class MIRACLObservation(Observation):
 
 
 class MIRACLEnvironment:
-    """MIRACL multilingual retrieval environment."""
+    """
+    MIRACL multilingual retrieval environment for RL training only.
+
+    WARNING: This is an RL-only environment. Not suitable for deterministic
+    evaluation via prime eval run. Use with: prime rl run configs/miracl_baseline.toml
+
+    Configurable via environment variables:
+    - MIRACL_DATASET: HF dataset name (default: miracl/miracl)
+    - MIRACL_LANGUAGE: language code (default: en)
+    - MIRACL_SPLIT: data split (default: train)
+    """
 
     def __init__(self):
         self.dataset = None
         self.current_idx = 0
         self.current_example = None
-        self.language = "en"
+        self.dataset_name = os.getenv("MIRACL_DATASET", "miracl/miracl")
+        self.language = os.getenv("MIRACL_LANGUAGE", "en")
+        self.dataset_split = os.getenv("MIRACL_SPLIT", "train")
         self._load_data()
 
     def _load_data(self):
-        """Load MIRACL dataset (English split)."""
+        """Load MIRACL dataset from HF or environment vars."""
         try:
-            self.dataset = load_dataset("miracl/miracl", self.language, split="train")
+            self.dataset = load_dataset(self.dataset_name, self.language, split=self.dataset_split)
         except Exception as e:
-            print(f"Warning: Could not load MIRACL: {e}")
+            print(f"Warning: Could not load {self.dataset_name}[{self.language}]: {e}")
             self.dataset = self._synthetic_dataset()
 
     def _synthetic_dataset(self):

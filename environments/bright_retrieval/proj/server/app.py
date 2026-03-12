@@ -3,6 +3,7 @@ from openenv.core.models import Action, Observation
 from datasets import load_dataset
 from typing import Optional
 import json
+import os
 
 
 class QueryAction(Action):
@@ -18,24 +19,36 @@ class RetrievalObservation(Observation):
 
 
 class BrightEnvironment:
-    """BRIGHT dataset environment for retrieval training."""
+    """
+    BRIGHT dataset environment for RL training only.
+
+    WARNING: This is an RL-only environment. Not suitable for deterministic
+    evaluation via prime eval run. Use with: prime rl run configs/bright_baseline.toml
+
+    Configurable via environment variables:
+    - BRIGHT_DATASET: HF dataset name (default: google-research-datasets/BRIGHT)
+    - BRIGHT_CONFIG: dataset config (default: gpt4_reason)
+    - BRIGHT_SPLIT: data split (default: examples)
+    """
 
     def __init__(self):
         self.dataset = None
         self.current_idx = 0
         self.current_example = None
         self.corpus = {}
+        self.dataset_name = os.getenv("BRIGHT_DATASET", "google-research-datasets/BRIGHT")
+        self.dataset_config = os.getenv("BRIGHT_CONFIG", "gpt4_reason")
         self._load_data()
 
     def _load_data(self):
-        """Load BRIGHT dataset and corpus."""
+        """Load BRIGHT dataset and corpus from HF or environment vars."""
         try:
             # Load examples (queries with gold passages)
-            examples = load_dataset("google-research-datasets/BRIGHT", "examples", split=None)
-            self.dataset = examples["gpt4_reason"] if "gpt4_reason" in examples else examples
+            examples = load_dataset(self.dataset_name, "examples", split=None)
+            self.dataset = examples[self.dataset_config] if self.dataset_config in examples else examples
 
             # Load corpus
-            corpus_data = load_dataset("google-research-datasets/BRIGHT", "documents", split=None)
+            corpus_data = load_dataset(self.dataset_name, "documents", split=None)
             corpus_split = corpus_data["default"] if "default" in corpus_data else corpus_data
 
             for doc in corpus_split:
@@ -43,7 +56,7 @@ class BrightEnvironment:
                 self.corpus[doc_id] = doc.get("content", "")
         except Exception as e:
             # Fallback to synthetic data
-            print(f"Warning: Could not load BRIGHT: {e}")
+            print(f"Warning: Could not load {self.dataset_name}: {e}")
             self.dataset = self._synthetic_dataset()
             self.corpus = self._synthetic_corpus()
 
