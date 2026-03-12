@@ -1,4 +1,4 @@
-model = "PrimeIntellect/Qwen3-1.5B-Instruct"
+model = "PrimeIntellect/Qwen3-0.6B-Reverse-Text-SFT"
 max_steps = 10000
 
 # Training hyperparameters
@@ -13,7 +13,7 @@ temperature = 0.7
 
 # BRIGHT retrieval training
 [[env]]
-id = "primeintellect/bright-retrieval"
+id = "pierretokns/bright-retrieval"
 args = { split = "train" }
 
 # W&B logging (optional - add your W&B key to enable)
@@ -29,7 +29,7 @@ num_examples = -1
 rollouts_per_example = 1
 
 [[eval.env]]
-id = "primeintellect/bright-retrieval"
+id = "pierretokns/bright-retrieval"
 args = { split = "test" }
 
 # Checkpointing

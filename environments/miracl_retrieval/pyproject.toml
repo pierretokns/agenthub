@@ -1,0 +1,20 @@
+[project]
+name = "miracl-retrieval"
+description = "OpenEnv-backed environment"
+tags = ["openenv", "tools", "multi-turn"]
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "verifiers[openenv]>=0.1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["miracl_retrieval.py", "pyproject.toml", "README.md", "proj/**/*", "proj/.build.json"]
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3
